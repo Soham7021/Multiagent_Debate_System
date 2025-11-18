@@ -4,6 +4,8 @@ from typing import List
 from langgraph.graph import run_debate
 from database.db import save_decision
 from fastapi.middleware.cors import CORSMiddleware
+from langgraph.debate_turns import DOCUMENT_STORE
+from langgraph.debate_turns import get_trace
 
 
 # Import the function that adds company docs into FAISS index
@@ -104,6 +106,36 @@ async def upload_files(files: List[UploadFile] = File(...)):
         raise HTTPException(status_code=500, detail=f"Failed to add file documents: {e}")
 
     return {"success": True, "added_files": len(docs)}
+
+@app.get("/company/debug")
+async def debug_docs():
+    """
+    Shows how many documents are stored in FAISS
+    and gives a short preview of each document.
+    Helpful for checking RAG/HyDE behavior.
+    """
+    sample = []
+
+    for d in DOCUMENT_STORE[:3]:
+        preview = d[:200].replace("\n", " ")
+        sample.append(preview + "...")
+    
+    return {
+        "success": True,
+        "total_docs": len(DOCUMENT_STORE),
+        "sample_docs": sample
+    }
+
+@app.get("/company/debug-trace")
+async def debug_trace():
+    """
+    Shows FULL HyDE + RAG + agent evidence trace
+    from last debate.
+    """
+    return {
+        "success": True,
+        "trace": get_trace()
+    }
 
 
 # Optional: health endpoint
