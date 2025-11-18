@@ -1,79 +1,68 @@
+// js/app.js
 import { uploadFileDocs, startDebate } from "./api.js";
-import { showSelectedFiles, showUploadedFiles, showUploadStatus, streamTranscript, showJudgeOutput } from "./ui.js";
+import {
+  showSelectedFiles,
+  showUploadedFiles,
+  showUploadStatus,
+  showTranscriptStreaming,
+  showJudgeOutput,
+  setLoading
+} from "./ui.js";
 
-/** Theme toggle logic (dark/light) */
-const themeToggle = document.getElementById("themeToggle");
-const htmlEl = document.documentElement;
-function applyInitialTheme() {
-  const saved = localStorage.getItem("theme-mode");
-  if (saved === "dark") {
-    htmlEl.classList.add("dark");
-    themeToggle.checked = true;
-  } else if (saved === "light") {
-    htmlEl.classList.remove("dark");
-    themeToggle.checked = false;
-  } else {
-    // use prefers-color-scheme
-    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    if (prefersDark) {
-      htmlEl.classList.add("dark");
-      themeToggle.checked = true;
+let uploadedFilesMemory = [];
+
+document.getElementById("uploadFilesBtn").onclick = () => {
+    document.getElementById("fileInput").click();
+};
+
+document.getElementById("fileInput").onchange = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    showSelectedFiles(files);
+    showUploadStatus("Uploading...");
+    const result = await uploadFileDocs(files);
+    if (result.success) {
+        uploadedFilesMemory.push(...Array.from(files).map(f => f.name));
+        showUploadedFiles(uploadedFilesMemory);
+        showUploadStatus(`Uploaded ${result.added_files || files.length} files.`);
+    } else {
+        showUploadStatus("Upload failed.");
+        console.error(result.error);
     }
-  }
-}
-applyInitialTheme();
-themeToggle.addEventListener("change", () => {
-  if (themeToggle.checked) {
-    htmlEl.classList.add("dark");
-    localStorage.setItem("theme-mode", "dark");
-  } else {
-    htmlEl.classList.remove("dark");
-    localStorage.setItem("theme-mode", "light");
-  }
-});
+};
 
-/** Upload flow */
-const uploadBtn = document.getElementById("uploadFilesBtn");
-const fileInput = document.getElementById("fileInput");
-let uploadedMemory = [];
+// Start debate flow
+document.getElementById("startDebateBtn").onclick = async () => {
+    const decision = document.getElementById("decisionInput").value.trim();
+    if (!decision) return alert("Enter a decision first!");
 
-uploadBtn.addEventListener("click", () => fileInput.click());
+    // clear previous transcript & judge
+    document.getElementById("transcript").innerHTML = "";
+    document.getElementById("judgeOutput").innerHTML = "";
 
-fileInput.addEventListener("change", async (e) => {
-  const files = e.target.files;
-  if (!files || files.length === 0) return;
-  showSelectedFiles(files);
-  showUploadStatus("Uploading files...");
-  const res = await uploadFileDocs(files);
-  if (res && res.success) {
-    const names = Array.from(files).map(f => f.name);
-    uploadedMemory.push(...names);
-    showUploadedFiles(uploadedMemory);
-    showUploadStatus(`Uploaded ${res.added_files} files.`);
-  } else {
-    showUploadStatus("Upload failed: " + (res.error || "unknown"));
-  }
-});
+    setLoading(true, "Starting debate — agents are preparing...");
+    const data = await startDebate(decision);
+    setLoading(false);
 
-/** Start debate */
-const startBtn = document.getElementById("startDebateBtn");
-const decisionInput = document.getElementById("decisionInput");
-const loadingSmall = document.getElementById("loadingSmall");
+    if (!data.success) {
+        alert("Debate failed. See console for details.");
+        console.error(data.error);
+        return;
+    }
 
-startBtn.addEventListener("click", async () => {
-  const decision = decisionInput.value.trim();
-  if (!decision) return alert("Enter a decision to start the debate.");
-  loadingSmall.classList.remove("hidden");
-  // call backend
-  const data = await startDebate(decision);
-  loadingSmall.classList.add("hidden");
+    const result = data.result || data;
 
-  if (!data || !data.success) {
-    alert("Debate failed: " + (data?.error || "unknown"));
-    return;
-  }
+    // show streaming transcript
+    const transcript = (result.transcript || []);
+    // If transcript elements are strings, convert to {agent, text} expected shape
+    const normalized = transcript.map(t => {
+        if (typeof t === "string") return { agent: "Agent", text: t };
+        return t;
+    });
 
-  // stream transcript then show judge
-  await streamTranscript(data.result.transcript, 900);
-  showJudgeOutput(data.result.judge);
-});
+    await showTranscriptStreaming(normalized, 900);
+
+    // show structured judge summary
+    const judge = result.judge || result;
+    showJudgeOutput(judge);
+};

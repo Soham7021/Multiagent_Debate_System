@@ -1,101 +1,167 @@
-/**
- * UI helpers: render chat bubbles, avatars, autoscroll, typing effect
- */
+// js/ui.js
 
-const AGENT_META = {
-  "Finance": { color: "bg-amber-600", emoji: "💰" },
-  "Technical": { color: "bg-sky-600", emoji: "⚙️" },
-  "Policy": { color: "bg-violet-600", emoji: "🏛️" },
-  "Market": { color: "bg-emerald-600", emoji: "📈" },
-  "Critic": { color: "bg-rose-600", emoji: "🔍" },
-  "Pricing": { color: "bg-indigo-600", emoji: "💵" },
-  "Strategy": { color: "bg-fuchsia-600", emoji: "🎯" }
+// Emoji map for agents
+const AGENT_EMOJI = {
+  "Finance": "💰",
+  "Technical": "🛠️",
+  "Policy": "⚖️",
+  "Market": "📈",
+  "Critic": "🧐",
+  "Pricing": "💵",
+  "Strategy": "🎯"
 };
 
-function createAgentBlock(agent, text, compact=false) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "flex items-start space-x-3";
-
-  const meta = AGENT_META[agent] || { color: "bg-gray-600", emoji: "🧠" };
-
-  const avatar = document.createElement("div");
-  avatar.className = `agent-avatar ${meta.color}`;
-  avatar.innerText = meta.emoji;
-
-  const content = document.createElement("div");
-  content.className = "flex-1";
-
-  const header = document.createElement("div");
-  header.className = "text-sm font-semibold text-gray-800 dark:text-gray-200";
-  header.innerText = agent;
-
-  const bubble = document.createElement("div");
-  bubble.className = "agent-bubble mt-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm";
-  bubble.style.border = "1px solid rgba(0,0,0,0.04)";
-  bubble.innerText = text;
-
-  content.appendChild(header);
-  content.appendChild(bubble);
-
-  wrapper.appendChild(avatar);
-  wrapper.appendChild(content);
-
-  return wrapper;
+export function showSelectedFiles(fileList) {
+    const el = document.getElementById("selectedFiles");
+    el.innerHTML = "";
+    const ul = document.createElement("ul");
+    ul.className = "simple-list";
+    for (const f of fileList) {
+        const li = document.createElement("li");
+        li.textContent = f.name;
+        ul.appendChild(li);
+    }
+    el.appendChild(ul);
 }
 
-export function showSelectedFiles(files) {
-  const el = document.getElementById("selectedFiles");
-  el.innerHTML = "<strong>Selected:</strong><br>" + Array.from(files).map(f => f.name).join("<br>");
+export function showUploadedFiles(names) {
+    const el = document.getElementById("uploadedList");
+    el.innerHTML = "";
+    const ul = document.createElement("ul");
+    ul.className = "simple-list";
+    for (const n of names) {
+        const li = document.createElement("li");
+        li.textContent = n;
+        ul.appendChild(li);
+    }
+    el.appendChild(ul);
 }
 
-export function showUploadedFiles(list) {
-  const el = document.getElementById("uploadedList");
-  el.innerHTML = "<strong>Uploaded:</strong><br>" + list.join("<br>");
+export function showUploadStatus(text) {
+    const el = document.getElementById("uploadStatus");
+    el.textContent = text;
 }
 
-export function showUploadStatus(msg) {
-  const el = document.getElementById("uploadStatus");
-  el.innerText = msg;
+// Loading spinner control
+export function setLoading(on, text = "Running debate… Agents are discussing...") {
+    const load = document.getElementById("loading");
+    if (on) {
+        load.style.display = "flex";
+        const p = load.querySelector("p");
+        if (p) p.textContent = text;
+    } else {
+        load.style.display = "none";
+    }
 }
 
-/** Append a single agent message to chat and auto-scroll */
-export function appendAgentMessage(agent, text) {
-  const chat = document.getElementById("chatWindow");
-  const block = createAgentBlock(agent, text);
-  chat.appendChild(block);
-  chat.scrollTop = chat.scrollHeight + 1000;
+// Streaming transcript: shows messages one by one with small delay
+export async function showTranscriptStreaming(transcript, perMessageMs = 900) {
+    const container = document.getElementById("transcript");
+    container.innerHTML = "";
+
+    for (const message of transcript) {
+        appendAgentBubble(message.agent, message.text, container);
+        await sleep(perMessageMs);
+        // auto-scroll
+        container.scrollTop = container.scrollHeight;
+    }
 }
 
-/** Stream messages one-by-one with small delay (simulated streaming) */
-export async function streamTranscript(transcript, delay = 900) {
-  const chat = document.getElementById("chatWindow");
-  chat.innerHTML = ""; // clear previous
-  for (let i = 0; i < transcript.length; i++) {
-    const msg = transcript[i];
-    // show typing placeholder
-    const placeholder = createAgentBlock(msg.agent, "…");
-    placeholder.querySelector(".agent-bubble").classList.add("opacity-60", "italic");
-    chat.appendChild(placeholder);
-    chat.scrollTop = chat.scrollHeight + 1000;
+// Append a single message as chat bubble
+export function appendAgentBubble(agent, text, container = null) {
+    if (!container) container = document.getElementById("transcript");
 
-    // wait a bit to simulate thinking/typing
-    await new Promise(r => setTimeout(r, Math.min(delay, 1200)));
+    const wrapper = document.createElement("div");
+    wrapper.className = "message-row";
 
-    // replace placeholder text with real
-    placeholder.querySelector(".agent-bubble").classList.remove("opacity-60", "italic");
-    placeholder.querySelector(".agent-bubble").innerText = msg.text;
+    const avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.textContent = AGENT_EMOJI[agent] || "🤖";
 
-    chat.scrollTop = chat.scrollHeight + 1000;
+    const bubbleWrap = document.createElement("div");
+    bubbleWrap.className = "bubble-wrap";
 
-    // small pause before next
-    await new Promise(r => setTimeout(r, 200));
-  }
+    const header = document.createElement("div");
+    header.className = "bubble-header";
+    header.innerHTML = `<strong>${agent}</strong>`;
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.innerHTML = sanitizeForHTML(text).replace(/\n/g, "<br>");
+
+    bubbleWrap.appendChild(header);
+    bubbleWrap.appendChild(bubble);
+
+    wrapper.appendChild(avatar);
+    wrapper.appendChild(bubbleWrap);
+
+    container.appendChild(wrapper);
 }
 
-/** Render judge output */
+// Render a structured judge summary (clean UI)
+export function renderJudgeSummary(judge) {
+    const card = document.getElementById("judgeCard");
+    const out = document.getElementById("judgeOutput");
+
+    if (!judge) {
+        card.classList.add("hidden");
+        out.innerHTML = "";
+        return;
+    }
+
+    card.classList.remove("hidden");
+
+    // Final recommendation badge (colored)
+    const rec = judge.final_recommendation || "modify";
+    const recColor = rec === "accept" ? "bg-green-200 text-green-900"
+                   : rec === "reject" ? "bg-red-200 text-red-900"
+                   : "bg-indigo-200 text-indigo-900";
+
+    // build agent scores HTML
+    let scoresHTML = "";
+    if (judge.scores) {
+        for (const [agent, score] of Object.entries(judge.scores)) {
+            scoresHTML += `<div class="agent-score"><div>${agent}</div><div class="font-semibold">${score}</div></div>`;
+        }
+    }
+
+    out.innerHTML = `
+      <div class="mb-3">
+        <div class="text-sm font-medium">Final Recommendation</div>
+        <div class="mt-2 inline-block px-3 py-1 rounded ${recColor} font-semibold">${rec}</div>
+      </div>
+
+      <div class="mt-3">
+        <h4 class="font-semibold">Reason</h4>
+        <p class="text-sm text-gray-200 mt-1">${escapeHtml(judge.reason || "No reason provided.")}</p>
+      </div>
+
+      <div class="mt-4">
+        <h4 class="font-semibold">Summary of Arguments</h4>
+        <p class="text-sm text-gray-200 mt-1">${escapeHtml(judge.summary_of_arguments || "")}</p>
+      </div>
+
+    `;
+}
+
+// keep showJudgeOutput name for imports
 export function showJudgeOutput(judgeObj) {
-  const judgeCard = document.getElementById("judgeCard");
-  judgeCard.classList.remove("hidden");
-  const pre = document.getElementById("judgeOutput");
-  pre.textContent = JSON.stringify(judgeObj, null, 2);
+    renderJudgeSummary(judgeObj);
+}
+
+// utilities
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function sanitizeForHTML(s) {
+    if (!s) return "";
+    return s.replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+}
+
+// For small strings we also show but safe-escaped
+function escapeHtml(s) {
+    return sanitizeForHTML(String(s)).replace(/\n/g, "<br>");
 }
