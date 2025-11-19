@@ -215,7 +215,6 @@ Relevant company docs:
 {evidence['summary']}
 
 Respond in 3–4 clear sentences.
-End with: "Score: X/10".
 """
 
     return (await ask_llm(prompt)).strip()

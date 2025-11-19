@@ -1,5 +1,5 @@
 // js/api.js
-// dynamic backend host so you can use localhost or 127.0.0.1
+// Dynamic backend host so you can use localhost or 127.0.0.1
 const BACKEND = `http://${location.hostname}:8000`;
 
 export async function uploadFileDocs(files) {
@@ -35,13 +35,18 @@ export async function startDebate(decision) {
             body: JSON.stringify({ decision })
         });
 
-        // backend returns JSON even on non-200; guard res.ok
+        // Backend returns JSON even on non-200; guard res.ok
         const data = await res.json().catch(() => null);
         if (!res.ok) {
             return { success: false, error: data || `HTTP ${res.status}` };
         }
-        // expected shape { decision, result }
-        return { success: true, result: data.result || data, decision: data.decision || decision };
+        
+        // Expected shape { decision, result }
+        return { 
+            success: true, 
+            result: data.result || data, 
+            decision: data.decision || decision 
+        };
     } catch (e) {
         console.error("startDebate error", e);
         return { success: false, error: String(e) };

@@ -7,6 +7,6 @@ async def run_debate(decision: str):
     """
     return await run_turn_debate(
         decision=decision,
-        max_messages=7,   # <--- adjust debate length here
+        max_messages=20,   # <--- adjust debate length here
         start_agent="Finance"
     )
